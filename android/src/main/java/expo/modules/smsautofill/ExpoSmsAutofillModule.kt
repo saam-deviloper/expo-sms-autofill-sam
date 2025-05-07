@@ -1,50 +1,94 @@
 package expo.modules.smsautofill
 
-import expo.modules.kotlin.modules.Module
-import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
+import android.app.Activity
+import android.content.*
+import android.os.Bundle
+import android.util.Log
+import com.facebook.react.modules.core.DeviceEventManagerModule
+import expo.modules.kotlin.modules.*
+import expo.modules.kotlin.events.EventEmitter
+import expo.modules.kotlin.Promise
+import com.google.android.gms.auth.api.phone.SmsRetriever
+import com.google.android.gms.common.api.CommonStatusCodes
+import com.google.android.gms.common.api.Status
 
-class ExpoSmsAutofillModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoSmsAutofill')` in JavaScript.
-    Name("ExpoSmsAutofill")
+class ExpoSmsAutofillModule : Module(), ActivityProvider {
+    private lateinit var context: Context
+    private var smsReceiver: BroadcastReceiver? = null
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
+    override fun definition() = ModuleDefinition {
+        Name("ExpoSmsAutofill")
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
+        Events("onSmsReceived")
 
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
+        OnCreate {
+            context = appContext.reactContext ?: throw Exception("No React Context")
+        }
+
+        Function("startSmsListener") {
+            val client = SmsRetriever.getClient(context)
+            val task = client.startSmsRetriever()
+
+            task.addOnSuccessListener {
+                Log.d("ExpoSmsAutofill", "SMS Retriever started successfully")
+            }
+
+            task.addOnFailureListener {
+                Log.e("ExpoSmsAutofill", "SMS Retriever failed to start", it)
+            }
+
+            registerReceiver()
+        }
     }
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
+    private fun registerReceiver() {
+        smsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (SmsRetriever.SMS_RETRIEVED_ACTION == intent?.action) {
+                    val extras = intent.extras
+                    val status = extras?.get(SmsRetriever.EXTRA_STATUS) as Status
+                    when (status.statusCode) {
+                        CommonStatusCodes.SUCCESS -> {
+                            val message = extras.get(SmsRetriever.EXTRA_SMS_MESSAGE) as String
+                            Log.d("ExpoSmsAutofill", "Received SMS: $message")
+                            sendEvent("onSmsReceived", mapOf("otp" to extractOtp(message)))
+                        }
+                        CommonStatusCodes.TIMEOUT -> {
+                            Log.w("ExpoSmsAutofill", "SMS Retriever timed out")
+                        }
+                    }
+                }
+            }
+        }
+
+        val intentFilter = IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION)
+        context.registerReceiver(smsReceiver, intentFilter)
     }
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(ExpoSmsAutofillView::class) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { view: ExpoSmsAutofillView, url: URL ->
-        view.webView.loadUrl(url.toString())
-      }
-      // Defines an event that the view can send to JavaScript.
-      Events("onLoad")
+    private fun extractOtp(message: String): String {
+        // Very basic 6-digit OTP extraction
+        val regex = Regex("\\b\\d{6}\\b")
+        return regex.find(message)?.value ?: ""
     }
-  }
+
+    private fun sendEvent(eventName: String, params: Map<String, Any?>) {
+        try {
+            appContext
+                .eventEmitter
+                .emit(eventName, params)
+        } catch (e: Exception) {
+            Log.e("ExpoSmsAutofill", "Failed to send event: $eventName", e)
+        }
+    }
+
+    override fun getCurrentActivity(): Activity? {
+        return appContext.currentActivity
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        smsReceiver?.let {
+            context.unregisterReceiver(it)
+        }
+    }
 }

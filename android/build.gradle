@@ -29,7 +29,9 @@ if (useManagedAndroidSdkVersions) {
       targetSdkVersion safeExtGet("targetSdkVersion", 34)
     }
   }
+ 
 }
+
 
 android {
   namespace "expo.modules.smsautofill"
@@ -40,4 +42,9 @@ android {
   lintOptions {
     abortOnError false
   }
+}
+
+dependencies {
+  // Required for SMS Retriever API
+  implementation 'com.google.android.gms:play-services-auth-api-phone:18.0.1'
 }

@@ -1,2 +1,16 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="expo.modules.smsautofill">
+
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <uses-permission android:name="android.permission.READ_SMS"/>
+
+    <application>
+        <!-- Required for SMS Retriever API -->
+        <service
+            android:name="com.google.android.gms.auth.api.phone.SmsRetrieverService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true"/>
+    </application>
+
 </manifest>
