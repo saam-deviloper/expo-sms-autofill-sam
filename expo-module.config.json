@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoSmsAutofillModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.smsautofill.ExpoSmsAutofillModule"]
+  }
+}

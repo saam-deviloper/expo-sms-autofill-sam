@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-sms-autofill": ["../src/index"],
+      "expo-sms-autofill/*": ["../src/*"]
+    }
+  }
+}
